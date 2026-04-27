@@ -93,6 +93,18 @@ int mv_rom_type_index(mv_unit_t u) {
     }
 }
 
+int mv_unit_has_rom(const mv_instance_t *inst, mv_unit_t u) {
+    if (!inst || inst->module_dir[0] == '\0') return 0;
+    int idx = mv_rom_type_index(u);
+    const char *fname = mv_rom_filename(u);
+    if (idx < 0 || !fname) return 0;
+    char path[MV_MODULE_DIR_LEN + 32];
+    snprintf(path, sizeof(path), "%s/roms/%s", inst->module_dir, fname);
+    struct stat st;
+    if (stat(path, &st) != 0) return 0;
+    return st.st_size == (off_t)rom_types[idx].length;
+}
+
 /* Safe ROM loader — does NOT call exit() on any failure path. Returns 1
  * if rom was successfully loaded into inst->machine, 0 otherwise.
  * Always updates inst->rom_status. */
