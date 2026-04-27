@@ -36,7 +36,11 @@ static void apply_pending(mv_instance_t *inst) {
         inst->fb_l = inst->fb_r = 0.0f;
         inst->fb_lpf_l = inst->fb_lpf_r = 0.0f;
         inst->effect_fn = mv_dispatch_for(inst->unit, inst->program);
-        /* Re-attempt ROM load (also resets Machine state for ROM mode) */
+        /* Init LFO for the new program (gated on rt->has_lfo internally).
+         * Must happen for BOTH decompiled and ROM modes so any LFO-using
+         * program gets the right oscillator state, not zeros. */
+        mv_init_lfo(inst);
+        /* Re-attempt ROM load (resets Machine state for ROM mode) */
         if (!mv_try_load_rom(inst)) {
             inst->source = MV_SOURCE_DECOMPILED;
         }
@@ -123,38 +127,35 @@ static void mv_process(void *vp, int16_t *audio_inout, int frames) {
         int16_t in13 = (int16_t)(clamped * 4095.0f);  /* 13-bit signed range */
         int16_t ol = 0, or_ = 0;
 
-        if (inst->source == MV_SOURCE_ROM) {
-            /* Cycle-accurate path. Run LFO at /8 rate, patch_machine for MV2. */
-            if (inst->rom_lfo_active && (inst->sample_counter & 7) == 0) {
-                uint16_t v1 = inst->rom_lfo1.update(&inst->rom_lfo1);
-                uint16_t v2 = inst->rom_lfo2.update(&inst->rom_lfo2);
-                /* Apply user lfo_depth scale */
-                float depth = inst->lfo_depth;
-                v1 = (uint16_t)((float)v1 * depth);
-                v2 = (uint16_t)((float)v2 * depth);
-                inst->rom_lfo1_val = (uint32_t)v1
-                    | ((uint32_t)inst->rom_lfo_patch->top1 << 16);
-                inst->rom_lfo2_val = (uint32_t)v2
-                    | ((uint32_t)inst->rom_lfo_patch->top2 << 16);
-                patch_machine(&inst->machine, inst->rom_lfo1_val,
-                              inst->rom_lfo2_val,
-                              inst->rom_lfo_patch->next_instr_opcode);
+        /* Mirror upstream's main loop: run LFO update at /8 sample rate
+         * (~2930 Hz at 23.4kHz) BEFORE the DSP tick. Only active when
+         * inst->lfo_active (set by mv_try_load_rom only when rt->has_lfo).
+         * In decompiled mode for non-LFO units, lfo1_val/lfo2_val stay 0
+         * — same as upstream. */
+        if (inst->lfo_active && (inst->sample_counter & 7) == 0) {
+            uint16_t v1 = inst->lfo1.update(&inst->lfo1);
+            uint16_t v2 = inst->lfo2.update(&inst->lfo2);
+            float depth = inst->lfo_depth;
+            v1 = (uint16_t)((float)v1 * depth);
+            v2 = (uint16_t)((float)v2 * depth);
+            inst->lfo1_val = (uint32_t)v1
+                | ((uint32_t)inst->lfo_patch->top1 << 16);
+            inst->lfo2_val = (uint32_t)v2
+                | ((uint32_t)inst->lfo_patch->top2 << 16);
+            if (inst->source == MV_SOURCE_ROM) {
+                patch_machine(&inst->machine, inst->lfo1_val, inst->lfo2_val,
+                              inst->lfo_patch->next_instr_opcode);
             }
+        }
+
+        if (inst->source == MV_SOURCE_ROM) {
             Sample s;
             run_machine_tick(&inst->machine, in13, &s);
             ol = s.s[0]; or_ = s.s[1];
         } else {
-            /* Decompiled path */
             inst->effect_fn(in13, &ol, &or_, inst->dram, inst->ptr,
-                            inst->lfo1, inst->lfo2);
-            inst->ptr = (inst->ptr + 1) & 0x3fff;
-            if ((inst->sample_counter & 7) == 0) {
-                /* Honor user lfo_rate as a multiplier on the natural increment */
-                uint32_t step = (uint32_t)(1.0f * inst->lfo_rate);
-                if (step < 1) step = 1;
-                inst->lfo1 += step;
-                inst->lfo2 += step * 2;
-            }
+                            inst->lfo1_val, inst->lfo2_val);
+            inst->ptr++;
         }
         inst->sample_counter++;
 

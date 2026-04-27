@@ -93,6 +93,20 @@ int mv_rom_type_index(mv_unit_t u) {
     }
 }
 
+void mv_init_lfo(mv_instance_t *inst) {
+    inst->lfo_active = 0;
+    inst->lfo1_val = 0;
+    inst->lfo2_val = 0;
+    inst->lfo_patch = NULL;
+    int idx = mv_rom_type_index(inst->unit);
+    if (idx < 0) return;
+    RomType *rt = &rom_types[idx];
+    if (!rt->has_lfo) return;
+    int prog_no = inst->program + rt->first_program_number;
+    inst->lfo_active = init_lfo_for_program(
+        prog_no, &inst->lfo1, &inst->lfo2, &inst->lfo_patch);
+}
+
 int mv_unit_has_rom(const mv_instance_t *inst, mv_unit_t u) {
     if (!inst || inst->module_dir[0] == '\0') return 0;
     int idx = mv_rom_type_index(u);
@@ -176,13 +190,6 @@ int mv_try_load_rom(mv_instance_t *inst) {
     inst->machine.acc = 0;
     inst->machine.memory_shift = rt->memory_shift;
     memset(inst->machine.dram, 0, sizeof(inst->machine.dram));
-
-    /* Init LFO if program uses one (uses upstream's 1-indexed program number) */
-    int prog_no = inst->program + rt->first_program_number;
-    inst->rom_lfo_active = init_lfo_for_program(
-        prog_no, &inst->rom_lfo1, &inst->rom_lfo2, &inst->rom_lfo_patch);
-    inst->rom_lfo1_val = 0;
-    inst->rom_lfo2_val = 0;
 
     inst->source = MV_SOURCE_ROM;
     snprintf(inst->rom_status, MV_STATUS_LEN, "ROM (%s)", rt->name);
