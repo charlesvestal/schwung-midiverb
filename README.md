@@ -25,6 +25,16 @@ Low Cut, High Cut, Width.
 ./scripts/install.sh
 ```
 
+## Credits
+
+- DSP: [thement/midiverb_emulator](https://github.com/thement/midiverb_emulator) (decompiled DASP effect functions, cycle-accurate interpreter, LFO tables) — GPL-3.0
+- Schwung integration: Charles Vestal
+- Original hardware: Alesis (1986–1987)
+
+Alesis, Midiverb, Midifex, and Midiverb II are trademarks of inMusic
+Brands, Inc. This module is an unofficial software emulation, not
+affiliated with or endorsed by Alesis.
+
 ## License
 
-GPL-3.0 — see LICENSE.
+GPL-3.0-or-later — see [LICENSE](LICENSE) and [src/dsp/THIRD_PARTY_LICENSES.md](src/dsp/THIRD_PARTY_LICENSES.md).
