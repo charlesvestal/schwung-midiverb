@@ -34,16 +34,27 @@ static void apply_pending(mv_instance_t *inst) {
     if (inst->reset_dsp_state || dirty) {
         memset(inst->dram, 0, sizeof(inst->dram));
         inst->fb_l = inst->fb_r = 0.0f;
+        inst->fb_lpf_l = inst->fb_lpf_r = 0.0f;
         inst->effect_fn = mv_dispatch_for(inst->unit, inst->program);
+        /* Re-attempt ROM load (also resets Machine state for ROM mode) */
+        if (!mv_try_load_rom(inst)) {
+            inst->source = MV_SOURCE_DECOMPILED;
+        }
         inst->reset_dsp_state = 0;
     }
 }
 
 static void* mv_create(const char *module_dir, const char *config_json) {
-    (void)module_dir; (void)config_json;
+    (void)config_json;
     mv_instance_t *inst = (mv_instance_t*)calloc(1, sizeof(mv_instance_t));
     if (!inst) return NULL;
     mv_instance_init(inst);
+    if (module_dir) {
+        strncpy(inst->module_dir, module_dir, MV_MODULE_DIR_LEN - 1);
+        inst->module_dir[MV_MODULE_DIR_LEN - 1] = '\0';
+    }
+    /* Try ROM at boot — if missing, falls back to decompiled silently */
+    mv_try_load_rom(inst);
     return inst;
 }
 
@@ -71,12 +82,36 @@ static void mv_process(void *vp, int16_t *audio_inout, int frames) {
     int n_mid_r = downsampler_process(&inst->down_r, in_r, frames, mid_r, 160);
     int n_mid = n_mid_l < n_mid_r ? n_mid_l : n_mid_r;
 
-    float a_hp = onepole_coef(inst->low_cut_hz);
-    float a_lp = onepole_coef(inst->high_cut_hz);
+    /* Tilt: shifts effective low/high cut to brighten or darken the wet path.
+     * tilt > 0 raises low cut toward 1kHz (brighter); tilt < 0 lowers high
+     * cut toward 1kHz (darker). Constants chosen for musical taste. */
+    float low_hz  = inst->low_cut_hz;
+    float high_hz = inst->high_cut_hz;
+    if (inst->tilt > 0.0f) {
+        low_hz = inst->low_cut_hz + inst->tilt * (1000.0f - inst->low_cut_hz);
+    } else if (inst->tilt < 0.0f) {
+        high_hz = inst->high_cut_hz + inst->tilt * (inst->high_cut_hz - 1000.0f);
+    }
+    float a_hp = onepole_coef(low_hz);
+    float a_lp = onepole_coef(high_hz);
+
+    /* Damping: one-pole LPF inside feedback. damping=0 -> ~3 kHz cutoff,
+     * damping=1 -> ~50 Hz. We just pick a fc and fold it into the same
+     * one-pole structure used for low/high cut. */
+    float damp_fc = 3000.0f * (1.0f - inst->damping) + 50.0f * inst->damping;
+    float a_damp = onepole_coef(damp_fc);
+
+    /* Saturation: only computed if non-zero (saves a tanh per sample) */
+    float sat_drive = 1.0f + 4.0f * inst->saturation;
+    float sat_norm  = (inst->saturation > 0.0f) ? tanhf(sat_drive) : 1.0f;
 
     for (int i = 0; i < n_mid; i++) {
+        /* Damped feedback */
+        inst->fb_lpf_l = a_damp * inst->fb_lpf_l + (1.0f - a_damp) * inst->fb_l;
+        inst->fb_lpf_r = a_damp * inst->fb_lpf_r + (1.0f - a_damp) * inst->fb_r;
+
         float mono = (mid_l[i] + mid_r[i]) * 0.5f * inst->input_gain;
-        mono += (inst->fb_l + inst->fb_r) * inst->feedback * 0.5f;
+        mono += (inst->fb_lpf_l + inst->fb_lpf_r) * inst->feedback * 0.5f;
 
         inst->hpf_l = a_hp * inst->hpf_l + (1.0f - a_hp) * mono;
         float hp = mono - inst->hpf_l;
@@ -91,19 +126,53 @@ static void mv_process(void *vp, int16_t *audio_inout, int frames) {
         if (clamped < -1.0f) clamped = -1.0f;
         int16_t in13 = (int16_t)(clamped * 4095.0f);  /* 13-bit signed range */
         int16_t ol = 0, or_ = 0;
-        inst->effect_fn(in13, &ol, &or_, inst->dram, inst->ptr,
-                        inst->lfo1, inst->lfo2);
-        inst->ptr = (inst->ptr + 1) & 0x3fff;
-        /* LFO updates at 1/8 the DSP rate (~2930 Hz at 23.4 kHz) */
-        if ((inst->ptr & 7) == 0) {
-            inst->lfo1 += 1;
-            inst->lfo2 += 2;
+
+        if (inst->source == MV_SOURCE_ROM) {
+            /* Cycle-accurate path. Run LFO at /8 rate, patch_machine for MV2. */
+            if (inst->rom_lfo_active && (inst->sample_counter & 7) == 0) {
+                uint16_t v1 = inst->rom_lfo1.update(&inst->rom_lfo1);
+                uint16_t v2 = inst->rom_lfo2.update(&inst->rom_lfo2);
+                /* Apply user lfo_depth scale */
+                float depth = inst->lfo_depth;
+                v1 = (uint16_t)((float)v1 * depth);
+                v2 = (uint16_t)((float)v2 * depth);
+                inst->rom_lfo1_val = (uint32_t)v1
+                    | ((uint32_t)inst->rom_lfo_patch->top1 << 16);
+                inst->rom_lfo2_val = (uint32_t)v2
+                    | ((uint32_t)inst->rom_lfo_patch->top2 << 16);
+                patch_machine(&inst->machine, inst->rom_lfo1_val,
+                              inst->rom_lfo2_val,
+                              inst->rom_lfo_patch->next_instr_opcode);
+            }
+            Sample s;
+            run_machine_tick(&inst->machine, in13, &s);
+            ol = s.s[0]; or_ = s.s[1];
+        } else {
+            /* Decompiled path */
+            inst->effect_fn(in13, &ol, &or_, inst->dram, inst->ptr,
+                            inst->lfo1, inst->lfo2);
+            inst->ptr = (inst->ptr + 1) & 0x3fff;
+            if ((inst->sample_counter & 7) == 0) {
+                /* Honor user lfo_rate as a multiplier on the natural increment */
+                uint32_t step = (uint32_t)(1.0f * inst->lfo_rate);
+                if (step < 1) step = 1;
+                inst->lfo1 += step;
+                inst->lfo2 += step * 2;
+            }
         }
+        inst->sample_counter++;
 
         /* Expand 13-bit output to float with soft clip (some effects
          * intentionally have internal gain > 1 and rely on output clipping). */
         float wl = (float)ol * (8.0f / 32768.0f);
         float wr = (float)or_ * (8.0f / 32768.0f);
+
+        /* Saturation (post-effect, pre-LPF) */
+        if (inst->saturation > 0.0f) {
+            wl = tanhf(wl * sat_drive) / sat_norm;
+            wr = tanhf(wr * sat_drive) / sat_norm;
+        }
+
         if (wl >  1.0f) wl =  1.0f;
         if (wl < -1.0f) wl = -1.0f;
         if (wr >  1.0f) wr =  1.0f;
@@ -166,6 +235,16 @@ static void mv_set_param(void *vp, const char *key, const char *val) {
         inst->high_cut_hz = atof(val);
     } else if (strcmp(key, "width") == 0) {
         inst->width = atof(val);
+    } else if (strcmp(key, "damping") == 0) {
+        inst->damping = atof(val);
+    } else if (strcmp(key, "saturation") == 0) {
+        inst->saturation = atof(val);
+    } else if (strcmp(key, "tilt") == 0) {
+        inst->tilt = atof(val);
+    } else if (strcmp(key, "lfo_rate") == 0) {
+        inst->lfo_rate = atof(val);
+    } else if (strcmp(key, "lfo_depth") == 0) {
+        inst->lfo_depth = atof(val);
     }
 }
 
@@ -203,6 +282,20 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
         n = snprintf(buf, buf_len, "%.0f", inst->high_cut_hz);
     } else if (strcmp(key, "width") == 0) {
         n = snprintf(buf, buf_len, "%.3f", inst->width);
+    } else if (strcmp(key, "damping") == 0) {
+        n = snprintf(buf, buf_len, "%.3f", inst->damping);
+    } else if (strcmp(key, "saturation") == 0) {
+        n = snprintf(buf, buf_len, "%.3f", inst->saturation);
+    } else if (strcmp(key, "tilt") == 0) {
+        n = snprintf(buf, buf_len, "%+.3f", inst->tilt);
+    } else if (strcmp(key, "lfo_rate") == 0) {
+        n = snprintf(buf, buf_len, "%.2fx", inst->lfo_rate);
+    } else if (strcmp(key, "lfo_depth") == 0) {
+        n = snprintf(buf, buf_len, "%.2f", inst->lfo_depth);
+    } else if (strcmp(key, "source") == 0) {
+        n = snprintf(buf, buf_len, "%d", (int)inst->source);
+    } else if (strcmp(key, "rom_status") == 0) {
+        n = snprintf(buf, buf_len, "%s", inst->rom_status);
     } else if (strcmp(key, "chain_params") == 0) {
         int max = mv_program_count(inst->unit) - 1;
         n = snprintf(buf, buf_len,
@@ -211,12 +304,17 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
             "{\"key\":\"program\",\"name\":\"Program\",\"type\":\"int\",\"min\":0,\"max\":%d},"
             "{\"key\":\"mix\",\"name\":\"Mix\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01},"
             "{\"key\":\"feedback\",\"name\":\"Feedback\",\"type\":\"float\",\"min\":0,\"max\":0.95,\"step\":0.01},"
+            "{\"key\":\"damping\",\"name\":\"Damping\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01},"
+            "{\"key\":\"lfo_rate\",\"name\":\"LFO Rate\",\"type\":\"float\",\"min\":0,\"max\":4,\"step\":0.05,\"unit\":\"x\"},"
+            "{\"key\":\"predelay_ms\",\"name\":\"Pre-delay\",\"type\":\"float\",\"min\":0,\"max\":200,\"step\":1,\"unit\":\"ms\"},"
+            "{\"key\":\"tilt\",\"name\":\"Tilt\",\"type\":\"float\",\"min\":-1,\"max\":1,\"step\":0.01},"
+            "{\"key\":\"width\",\"name\":\"Width\",\"type\":\"float\",\"min\":0,\"max\":1.5,\"step\":0.01},"
+            "{\"key\":\"saturation\",\"name\":\"Saturation\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01},"
             "{\"key\":\"input_gain\",\"name\":\"Input Gain\",\"type\":\"float\",\"min\":0,\"max\":2,\"step\":0.01,\"unit\":\"x\"},"
             "{\"key\":\"output_gain\",\"name\":\"Output Gain\",\"type\":\"float\",\"min\":0,\"max\":2,\"step\":0.01,\"unit\":\"x\"},"
-            "{\"key\":\"predelay_ms\",\"name\":\"Pre-delay\",\"type\":\"float\",\"min\":0,\"max\":200,\"step\":1,\"unit\":\"ms\"},"
             "{\"key\":\"low_cut_hz\",\"name\":\"Low Cut\",\"type\":\"float\",\"min\":20,\"max\":1000,\"step\":1,\"unit\":\"Hz\"},"
             "{\"key\":\"high_cut_hz\",\"name\":\"High Cut\",\"type\":\"float\",\"min\":1000,\"max\":20000,\"step\":50,\"unit\":\"Hz\"},"
-            "{\"key\":\"width\",\"name\":\"Width\",\"type\":\"float\",\"min\":0,\"max\":1.5,\"step\":0.01}"
+            "{\"key\":\"lfo_depth\",\"name\":\"LFO Depth\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01}"
             "]", max);
     } else if (strcmp(key, "ui_hierarchy") == 0) {
         n = snprintf(buf, buf_len,
@@ -228,17 +326,30 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
                   "\"list_param\":\"program\","
                   "\"count_param\":\"program_count\","
                   "\"name_param\":\"program_name\","
-                  "\"knobs\":[\"mix\",\"feedback\",\"input_gain\",\"output_gain\",\"predelay_ms\",\"low_cut_hz\",\"high_cut_hz\",\"width\"],"
+                  "\"knobs\":[\"mix\",\"feedback\",\"damping\",\"lfo_rate\",\"predelay_ms\",\"tilt\",\"width\",\"saturation\"],"
                   "\"params\":["
                     "{\"key\":\"mix\",\"label\":\"Mix\"},"
                     "{\"key\":\"feedback\",\"label\":\"Feedback\"},"
+                    "{\"key\":\"damping\",\"label\":\"Damping\"},"
+                    "{\"key\":\"lfo_rate\",\"label\":\"LFO Rate\"},"
+                    "{\"key\":\"predelay_ms\",\"label\":\"Pre-delay\"},"
+                    "{\"key\":\"tilt\",\"label\":\"Tilt\"},"
+                    "{\"key\":\"width\",\"label\":\"Width\"},"
+                    "{\"key\":\"saturation\",\"label\":\"Saturation\"},"
+                    "{\"level\":\"levels\",\"label\":\"Levels & Filters\"},"
+                    "{\"level\":\"unit\",\"label\":\"Unit\"},"
+                    "{\"level\":\"source\",\"label\":\"Source\"}"
+                  "]"
+                "},"
+                "\"levels\":{"
+                  "\"label\":\"Levels & Filters\","
+                  "\"knobs\":[\"input_gain\",\"output_gain\",\"low_cut_hz\",\"high_cut_hz\",\"lfo_depth\"],"
+                  "\"params\":["
                     "{\"key\":\"input_gain\",\"label\":\"Input Gain\"},"
                     "{\"key\":\"output_gain\",\"label\":\"Output Gain\"},"
-                    "{\"key\":\"predelay_ms\",\"label\":\"Pre-delay\"},"
                     "{\"key\":\"low_cut_hz\",\"label\":\"Low Cut\"},"
                     "{\"key\":\"high_cut_hz\",\"label\":\"High Cut\"},"
-                    "{\"key\":\"width\",\"label\":\"Width\"},"
-                    "{\"level\":\"unit\",\"label\":\"Unit\"}"
+                    "{\"key\":\"lfo_depth\",\"label\":\"LFO Depth\"}"
                   "]"
                 "},"
                 "\"unit\":{"
@@ -247,6 +358,13 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
                   "\"select_param\":\"unit\","
                   "\"knobs\":[],"
                   "\"params\":[]"
+                "},"
+                "\"source\":{"
+                  "\"label\":\"Source\","
+                  "\"knobs\":[],"
+                  "\"params\":["
+                    "{\"key\":\"rom_status\",\"label\":\"Status\"}"
+                  "]"
                 "}"
               "}"
             "}");

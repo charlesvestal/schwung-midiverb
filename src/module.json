@@ -2,12 +2,42 @@
   "id": "midiverb",
   "name": "Midiverb",
   "abbrev": "MVB",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Alesis Midiverb / Midifex / Midiverb II emulator (lo-fi 23.4 kHz reverb)",
   "author": "Charles Vestal (DSP: thement/midiverb_emulator)",
   "license": "GPL-3.0",
   "dsp": "midiverb.so",
   "api_version": 2,
+  "assets": {
+    "path": "roms",
+    "label": "ROMs (optional)",
+    "extensions": [".rom", ".bin"],
+    "allowFolders": false,
+    "description": "Optional EPROM dumps for cycle-accurate emulation. Without ROMs the module runs the decompiled DSP path (sounds great but lacks LFO triggers and analog filter modeling). Drop in any subset.",
+    "hint": "Files must be the exact size shown. ROM dumps available from third-party EPROM archives (e.g. dbwbp.com).",
+    "hint_url": "https://github.com/charlesvestal/schwung-midiverb",
+    "hint_url_label": "Read more",
+    "files": [
+      {
+        "filename": "midiverb.rom",
+        "label": "Midiverb I",
+        "size": 16384,
+        "required": false
+      },
+      {
+        "filename": "midifex.rom",
+        "label": "Midifex",
+        "size": 16384,
+        "required": false
+      },
+      {
+        "filename": "midiverb2.rom",
+        "label": "Midiverb II",
+        "size": 32768,
+        "required": false
+      }
+    ]
+  },
   "capabilities": {
     "chainable": true,
     "component_type": "audio_fx"

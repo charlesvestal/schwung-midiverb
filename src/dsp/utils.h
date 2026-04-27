@@ -1,3 +1,11 @@
+/* Modified from upstream to be self-contained: added stdio/stdlib/string
+ * includes so the header can be used standalone. */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <stdarg.h>
+
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
 static inline void pexit(const char *msg) {
