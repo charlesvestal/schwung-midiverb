@@ -1,0 +1,47 @@
+{
+  "title": "Midiverb",
+  "children": [
+    {
+      "title": "Overview",
+      "lines": [
+        "Emulator of the",
+        "Alesis Midiverb,",
+        "Midifex, and",
+        "Midiverb II rack",
+        "reverbs.",
+        "",
+        "DSP runs at the",
+        "native 23.4 kHz",
+        "with a 32-tap",
+        "polyphase resampler."
+      ]
+    },
+    {
+      "title": "Controls",
+      "lines": [
+        "Jog wheel:",
+        "scroll programs",
+        "",
+        "Knobs 1-4: Mix,",
+        "Feedback, In Gain,",
+        "Out Gain",
+        "",
+        "Knobs 5-8: PreDly,",
+        "Low Cut, High Cut,",
+        "Width"
+      ]
+    },
+    {
+      "title": "Units",
+      "lines": [
+        "Three units in the",
+        "Unit submenu:",
+        "",
+        "Midiverb (64 prgs)",
+        "Midifex  (64 prgs)",
+        "Midiverb II",
+        "(100 prgs)"
+      ]
+    }
+  ]
+}
