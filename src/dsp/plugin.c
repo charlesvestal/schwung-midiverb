@@ -101,10 +101,6 @@ static void mv_process(void *vp, int16_t *audio_inout, int frames) {
     float damp_fc = 3000.0f * (1.0f - inst->damping) + 50.0f * inst->damping;
     float a_damp = onepole_coef(damp_fc);
 
-    /* Saturation: only computed if non-zero (saves a tanh per sample) */
-    float sat_drive = 1.0f + 4.0f * inst->saturation;
-    float sat_norm  = (inst->saturation > 0.0f) ? tanhf(sat_drive) : 1.0f;
-
     for (int i = 0; i < n_mid; i++) {
         /* Damped feedback */
         inst->fb_lpf_l = a_damp * inst->fb_lpf_l + (1.0f - a_damp) * inst->fb_l;
@@ -166,12 +162,6 @@ static void mv_process(void *vp, int16_t *audio_inout, int frames) {
          * intentionally have internal gain > 1 and rely on output clipping). */
         float wl = (float)ol * (8.0f / 32768.0f);
         float wr = (float)or_ * (8.0f / 32768.0f);
-
-        /* Saturation (post-effect, pre-LPF) */
-        if (inst->saturation > 0.0f) {
-            wl = tanhf(wl * sat_drive) / sat_norm;
-            wr = tanhf(wr * sat_drive) / sat_norm;
-        }
 
         if (wl >  1.0f) wl =  1.0f;
         if (wl < -1.0f) wl = -1.0f;
@@ -237,8 +227,6 @@ static void mv_set_param(void *vp, const char *key, const char *val) {
         inst->width = atof(val);
     } else if (strcmp(key, "damping") == 0) {
         inst->damping = atof(val);
-    } else if (strcmp(key, "saturation") == 0) {
-        inst->saturation = atof(val);
     } else if (strcmp(key, "tilt") == 0) {
         inst->tilt = atof(val);
     } else if (strcmp(key, "lfo_rate") == 0) {
@@ -284,8 +272,6 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
         n = snprintf(buf, buf_len, "%.3f", inst->width);
     } else if (strcmp(key, "damping") == 0) {
         n = snprintf(buf, buf_len, "%.3f", inst->damping);
-    } else if (strcmp(key, "saturation") == 0) {
-        n = snprintf(buf, buf_len, "%.3f", inst->saturation);
     } else if (strcmp(key, "tilt") == 0) {
         n = snprintf(buf, buf_len, "%+.3f", inst->tilt);
     } else if (strcmp(key, "lfo_rate") == 0) {
@@ -304,16 +290,15 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
             "{\"key\":\"program\",\"name\":\"Program\",\"type\":\"int\",\"min\":0,\"max\":%d},"
             "{\"key\":\"mix\",\"name\":\"Mix\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01},"
             "{\"key\":\"feedback\",\"name\":\"Feedback\",\"type\":\"float\",\"min\":0,\"max\":0.95,\"step\":0.01},"
-            "{\"key\":\"damping\",\"name\":\"Damping\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01},"
-            "{\"key\":\"lfo_rate\",\"name\":\"LFO Rate\",\"type\":\"float\",\"min\":0,\"max\":4,\"step\":0.05,\"unit\":\"x\"},"
-            "{\"key\":\"predelay_ms\",\"name\":\"Pre-delay\",\"type\":\"float\",\"min\":0,\"max\":200,\"step\":1,\"unit\":\"ms\"},"
-            "{\"key\":\"tilt\",\"name\":\"Tilt\",\"type\":\"float\",\"min\":-1,\"max\":1,\"step\":0.01},"
-            "{\"key\":\"width\",\"name\":\"Width\",\"type\":\"float\",\"min\":0,\"max\":1.5,\"step\":0.01},"
-            "{\"key\":\"saturation\",\"name\":\"Saturation\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01},"
             "{\"key\":\"input_gain\",\"name\":\"Input Gain\",\"type\":\"float\",\"min\":0,\"max\":2,\"step\":0.01,\"unit\":\"x\"},"
             "{\"key\":\"output_gain\",\"name\":\"Output Gain\",\"type\":\"float\",\"min\":0,\"max\":2,\"step\":0.01,\"unit\":\"x\"},"
+            "{\"key\":\"predelay_ms\",\"name\":\"Pre-delay\",\"type\":\"float\",\"min\":0,\"max\":200,\"step\":1,\"unit\":\"ms\"},"
             "{\"key\":\"low_cut_hz\",\"name\":\"Low Cut\",\"type\":\"float\",\"min\":20,\"max\":1000,\"step\":1,\"unit\":\"Hz\"},"
             "{\"key\":\"high_cut_hz\",\"name\":\"High Cut\",\"type\":\"float\",\"min\":1000,\"max\":20000,\"step\":50,\"unit\":\"Hz\"},"
+            "{\"key\":\"width\",\"name\":\"Width\",\"type\":\"float\",\"min\":0,\"max\":1.5,\"step\":0.01},"
+            "{\"key\":\"damping\",\"name\":\"Damping\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01},"
+            "{\"key\":\"tilt\",\"name\":\"Tilt\",\"type\":\"float\",\"min\":-1,\"max\":1,\"step\":0.01},"
+            "{\"key\":\"lfo_rate\",\"name\":\"LFO Rate\",\"type\":\"float\",\"min\":0,\"max\":4,\"step\":0.05,\"unit\":\"x\"},"
             "{\"key\":\"lfo_depth\",\"name\":\"LFO Depth\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01}"
             "]", max);
     } else if (strcmp(key, "ui_hierarchy") == 0) {
@@ -326,29 +311,28 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
                   "\"list_param\":\"program\","
                   "\"count_param\":\"program_count\","
                   "\"name_param\":\"program_name\","
-                  "\"knobs\":[\"mix\",\"feedback\",\"damping\",\"lfo_rate\",\"predelay_ms\",\"tilt\",\"width\",\"saturation\"],"
+                  "\"knobs\":[\"mix\",\"feedback\",\"input_gain\",\"output_gain\",\"predelay_ms\",\"low_cut_hz\",\"high_cut_hz\",\"width\"],"
                   "\"params\":["
                     "{\"key\":\"mix\",\"label\":\"Mix\"},"
                     "{\"key\":\"feedback\",\"label\":\"Feedback\"},"
-                    "{\"key\":\"damping\",\"label\":\"Damping\"},"
-                    "{\"key\":\"lfo_rate\",\"label\":\"LFO Rate\"},"
+                    "{\"key\":\"input_gain\",\"label\":\"Input Gain\"},"
+                    "{\"key\":\"output_gain\",\"label\":\"Output Gain\"},"
                     "{\"key\":\"predelay_ms\",\"label\":\"Pre-delay\"},"
-                    "{\"key\":\"tilt\",\"label\":\"Tilt\"},"
+                    "{\"key\":\"low_cut_hz\",\"label\":\"Low Cut\"},"
+                    "{\"key\":\"high_cut_hz\",\"label\":\"High Cut\"},"
                     "{\"key\":\"width\",\"label\":\"Width\"},"
-                    "{\"key\":\"saturation\",\"label\":\"Saturation\"},"
-                    "{\"level\":\"levels\",\"label\":\"Levels & Filters\"},"
+                    "{\"level\":\"extras\",\"label\":\"Extras\"},"
                     "{\"level\":\"unit\",\"label\":\"Unit\"},"
                     "{\"level\":\"source\",\"label\":\"Source\"}"
                   "]"
                 "},"
-                "\"levels\":{"
-                  "\"label\":\"Levels & Filters\","
-                  "\"knobs\":[\"input_gain\",\"output_gain\",\"low_cut_hz\",\"high_cut_hz\",\"lfo_depth\"],"
+                "\"extras\":{"
+                  "\"label\":\"Extras\","
+                  "\"knobs\":[\"damping\",\"tilt\",\"lfo_rate\",\"lfo_depth\"],"
                   "\"params\":["
-                    "{\"key\":\"input_gain\",\"label\":\"Input Gain\"},"
-                    "{\"key\":\"output_gain\",\"label\":\"Output Gain\"},"
-                    "{\"key\":\"low_cut_hz\",\"label\":\"Low Cut\"},"
-                    "{\"key\":\"high_cut_hz\",\"label\":\"High Cut\"},"
+                    "{\"key\":\"damping\",\"label\":\"Damping\"},"
+                    "{\"key\":\"tilt\",\"label\":\"Tilt\"},"
+                    "{\"key\":\"lfo_rate\",\"label\":\"LFO Rate\"},"
                     "{\"key\":\"lfo_depth\",\"label\":\"LFO Depth\"}"
                   "]"
                 "},"
