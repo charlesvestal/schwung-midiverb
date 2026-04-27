@@ -39,6 +39,37 @@ int main(void) {
         fprintf(stderr, "FAIL: peak amplitude out of range\n");
         return 1;
     }
+
+    /* Detect upsampler underflow: re-process and count exact-zero samples
+     * in the output. A correctly-running 1 kHz sine at 0.5 amplitude should
+     * almost never produce samples exactly equal to 0.0 (only at zero
+     * crossings, which are infrequent). Any meaningful zero-sample count
+     * indicates the upsampler is emitting silence on underflow. */
+    downsampler_init(&down);
+    upsampler_init(&up);
+    int zero_count = 0;
+    int total_samples = 0;
+    for (int b = 0; b < total_blocks; b++) {
+        for (int i = 0; i < block_44; i++) {
+            float t = (b * block_44 + i) / 44100.0f;
+            in[i] = 0.5f * sinf(2.0f * (float)M_PI * 1000.0f * t);
+        }
+        int mid_n = downsampler_process(&down, in, block_44, mid, 160);
+        upsampler_process(&up, mid, mid_n, out, block_44);
+        if (b > 20) {
+            for (int i = 0; i < block_44; i++) {
+                if (out[i] == 0.0f) zero_count++;
+                total_samples++;
+            }
+        }
+    }
+    double zero_pct = 100.0 * zero_count / total_samples;
+    printf("zero samples after warmup: %d / %d (%.1f%%)\n",
+           zero_count, total_samples, zero_pct);
+    if (zero_pct > 1.0) {
+        fprintf(stderr, "FAIL: upsampler emits >1%% zero samples (underflow)\n");
+        return 1;
+    }
     printf("resampler ok\n");
     return 0;
 }

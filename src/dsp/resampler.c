@@ -9,10 +9,20 @@
 
 void downsampler_init(downsampler_t *r) {
     memset(r, 0, sizeof(*r));
+    /* Pre-fill RESAMPLER_TAPS zeros so the FIR window has a valid lookahead
+     * from the first call. Without this, the upsampler downstream gets fewer
+     * mid samples on the first call, leaving its buffer too short to produce
+     * a full output block. */
+    r->buf_pos = RESAMPLER_TAPS;
 }
 
 void upsampler_init(upsampler_t *r) {
     memset(r, 0, sizeof(*r));
+    /* Pre-fill RESAMPLER_TAPS zeros so the FIR window has a valid lookahead
+     * for the convolve from the very first output. Without this, the
+     * upsampler underflows by ~32 samples per block and emits silence for
+     * the second half of each block. */
+    r->buf_pos = RESAMPLER_TAPS;
 }
 
 static inline float convolve(const float *taps, const float *coeffs) {
