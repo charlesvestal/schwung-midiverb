@@ -81,19 +81,33 @@ static void mv_process(void *vp, int16_t *audio_inout, int frames) {
         inst->hpf_l = a_hp * inst->hpf_l + (1.0f - a_hp) * mono;
         float hp = mono - inst->hpf_l;
 
+        /* DASP is a 13-bit DSP. Upstream's CLI shifts input right by 3
+         * (16-bit -> 13-bit) before the effect and left-shifts output back
+         * with clipping. Without this scaling, internal int16 accumulators
+         * overflow on bright/transient material and wrap, producing harsh
+         * aliasing-like distortion. */
         float clamped = hp;
         if (clamped >  1.0f) clamped =  1.0f;
         if (clamped < -1.0f) clamped = -1.0f;
-        int16_t in16 = (int16_t)(clamped * 32767.0f);
+        int16_t in13 = (int16_t)(clamped * 4095.0f);  /* 13-bit signed range */
         int16_t ol = 0, or_ = 0;
-        inst->effect_fn(in16, &ol, &or_, inst->dram, inst->ptr,
+        inst->effect_fn(in13, &ol, &or_, inst->dram, inst->ptr,
                         inst->lfo1, inst->lfo2);
         inst->ptr = (inst->ptr + 1) & 0x3fff;
-        inst->lfo1 += 1;
-        inst->lfo2 += 2;
+        /* LFO updates at 1/8 the DSP rate (~2930 Hz at 23.4 kHz) */
+        if ((inst->ptr & 7) == 0) {
+            inst->lfo1 += 1;
+            inst->lfo2 += 2;
+        }
 
-        float wl = ol / 32768.0f;
-        float wr = or_ / 32768.0f;
+        /* Expand 13-bit output to float with soft clip (some effects
+         * intentionally have internal gain > 1 and rely on output clipping). */
+        float wl = (float)ol * (8.0f / 32768.0f);
+        float wr = (float)or_ * (8.0f / 32768.0f);
+        if (wl >  1.0f) wl =  1.0f;
+        if (wl < -1.0f) wl = -1.0f;
+        if (wr >  1.0f) wr =  1.0f;
+        if (wr < -1.0f) wr = -1.0f;
         inst->lpf_l = a_lp * inst->lpf_l + (1.0f - a_lp) * wl;
         inst->lpf_r = a_lp * inst->lpf_r + (1.0f - a_lp) * wr;
         wl = inst->lpf_l;
