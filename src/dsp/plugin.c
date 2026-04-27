@@ -250,10 +250,17 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
     } else if (strcmp(key, "program_name") == 0) {
         n = snprintf(buf, buf_len, "%s", mv_program_name(inst->unit, inst->program));
     } else if (strcmp(key, "unit_list") == 0) {
+        const char *suf0 = mv_unit_has_rom(inst, MV_UNIT_MIDIVERB)  ? " (ROM)" : "";
+        const char *suf1 = mv_unit_has_rom(inst, MV_UNIT_MIDIFEX)   ? " (ROM)" : "";
+        const char *suf2 = mv_unit_has_rom(inst, MV_UNIT_MIDIVERB2) ? " (ROM)" : "";
+        const char *cur0 = (inst->unit == MV_UNIT_MIDIVERB)  ? "* " : "";
+        const char *cur1 = (inst->unit == MV_UNIT_MIDIFEX)   ? "* " : "";
+        const char *cur2 = (inst->unit == MV_UNIT_MIDIVERB2) ? "* " : "";
         n = snprintf(buf, buf_len,
-            "[{\"index\":0,\"label\":\"Midiverb\"},"
-             "{\"index\":1,\"label\":\"Midifex\"},"
-             "{\"index\":2,\"label\":\"Midiverb II\"}]");
+            "[{\"index\":0,\"label\":\"%sMidiverb%s\"},"
+             "{\"index\":1,\"label\":\"%sMidifex%s\"},"
+             "{\"index\":2,\"label\":\"%sMidiverb II%s\"}]",
+            cur0, suf0, cur1, suf1, cur2, suf2);
     } else if (strcmp(key, "mix") == 0) {
         n = snprintf(buf, buf_len, "%.3f", inst->mix);
     } else if (strcmp(key, "feedback") == 0) {
@@ -322,8 +329,7 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
                     "{\"key\":\"high_cut_hz\",\"label\":\"High Cut\"},"
                     "{\"key\":\"width\",\"label\":\"Width\"},"
                     "{\"level\":\"extras\",\"label\":\"Extras\"},"
-                    "{\"level\":\"unit\",\"label\":\"Unit\"},"
-                    "{\"level\":\"source\",\"label\":\"Source\"}"
+                    "{\"level\":\"unit\",\"label\":\"Unit\"}"
                   "]"
                 "},"
                 "\"extras\":{"
@@ -342,13 +348,6 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
                   "\"select_param\":\"unit\","
                   "\"knobs\":[],"
                   "\"params\":[]"
-                "},"
-                "\"source\":{"
-                  "\"label\":\"Source\","
-                  "\"knobs\":[],"
-                  "\"params\":["
-                    "{\"key\":\"rom_status\",\"label\":\"Status\"}"
-                  "]"
                 "}"
               "}"
             "}");

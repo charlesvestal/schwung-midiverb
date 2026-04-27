@@ -97,6 +97,10 @@ mv_effect_fn  mv_dispatch_for(mv_unit_t u, int prog);
  * not exit on failure). */
 int           mv_try_load_rom(mv_instance_t *inst);
 
+/* Cheap existence + size check for a unit's ROM file (no parsing).
+ * Returns 1 if file present at expected size, 0 otherwise. */
+int           mv_unit_has_rom(const mv_instance_t *inst, mv_unit_t u);
+
 /* Apply current rom file naming convention */
 const char*   mv_rom_filename(mv_unit_t u);
 
