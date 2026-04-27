@@ -1,0 +1,8 @@
+This module includes Martin Eastwood's MVerb code and is distributed under the
+terms of the GNU General Public License, version 3 or later.
+
+Schwung integration by Andre Louis.
+
+See also:
+- https://github.com/martineastwood/mverb
+- bundled source notices in `src/dsp/MVerb.h`
