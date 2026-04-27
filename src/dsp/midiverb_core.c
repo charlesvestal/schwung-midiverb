@@ -44,7 +44,7 @@ void mv_instance_init(mv_instance_t *inst) {
     inst->program = 0;
     inst->effect_fn = dispatch_for(inst->unit, inst->program);
     inst->mix = 0.35f;
-    inst->feedback = 0.30f;
+    inst->feedback = 0.0f;
     inst->input_gain = 1.0f;
     inst->output_gain = 1.0f;
     inst->predelay_ms = 0.0f;
