@@ -169,7 +169,10 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
     } else if (strcmp(key, "program_name") == 0) {
         n = snprintf(buf, buf_len, "%s", mv_program_name(inst->unit, inst->program));
     } else if (strcmp(key, "unit_list") == 0) {
-        n = snprintf(buf, buf_len, "[\"Midiverb\",\"Midifex\",\"Midiverb II\"]");
+        n = snprintf(buf, buf_len,
+            "[{\"index\":0,\"label\":\"Midiverb\"},"
+             "{\"index\":1,\"label\":\"Midifex\"},"
+             "{\"index\":2,\"label\":\"Midiverb II\"}]");
     } else if (strcmp(key, "mix") == 0) {
         n = snprintf(buf, buf_len, "%.3f", inst->mix);
     } else if (strcmp(key, "feedback") == 0) {
