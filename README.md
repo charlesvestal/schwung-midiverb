@@ -37,4 +37,7 @@ affiliated with or endorsed by Alesis.
 
 ## License
 
-GPL-3.0-or-later — see [LICENSE](LICENSE) and [src/dsp/THIRD_PARTY_LICENSES.md](src/dsp/THIRD_PARTY_LICENSES.md).
+GPL-3.0-or-later. See:
+- [LICENSE](LICENSE) — full GPL-3 text
+- [NOTICE](NOTICE) — project attribution + trademark disclaimer
+- [src/dsp/THIRD_PARTY_LICENSES.md](src/dsp/THIRD_PARTY_LICENSES.md) — per-file vendoring details

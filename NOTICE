@@ -1,0 +1,19 @@
+schwung-midiverb
+================
+
+This module includes the midiverb_emulator DSP code by **thement**
+(https://github.com/thement/midiverb_emulator) and is distributed under
+the terms of the GNU General Public License, version 3 or later
+(GPL-3.0-or-later). The full text of the GPL-3 is in the LICENSE file.
+
+Schwung integration by Charles Vestal.
+
+Per-file vendoring details, including any modifications to upstream
+sources, are in src/dsp/THIRD_PARTY_LICENSES.md.
+
+Trademarks
+----------
+Alesis, Midiverb, Midifex, and Midiverb II are trademarks of inMusic
+Brands, Inc. (or its predecessor, Alesis Studio Electronics). This
+module is an unofficial software emulation; it is not affiliated with,
+endorsed by, or sponsored by Alesis or inMusic Brands.
