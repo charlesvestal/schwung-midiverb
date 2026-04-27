@@ -14,7 +14,7 @@ DSP based on [thement/midiverb_emulator](https://github.com/thement/midiverb_emu
 
 ## UI
 
-Osirus-style: jog wheel scrolls programs, Unit submenu picks between the
+Jog wheel scrolls programs, Unit submenu picks between the
 three units. Knobs 1-8: Mix, Feedback, Input Gain, Output Gain, Pre-delay,
 Low Cut, High Cut, Width.
 
