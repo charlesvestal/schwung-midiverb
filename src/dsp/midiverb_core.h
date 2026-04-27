@@ -43,15 +43,17 @@ typedef struct {
 
     int16_t  dram[MIDIVERB_DRAM_LEN];   /* used in decompiled mode */
     int      ptr;
-    uint32_t lfo1, lfo2;                /* simple counter LFOs (decompiled fallback) */
+
+    /* LFO state — used by both decompiled (for has_lfo units) and ROM modes,
+     * matching upstream's main loop semantics. */
+    Lfo         lfo1, lfo2;
+    LfoPatch   *lfo_patch;
+    int         lfo_active;
+    uint32_t    lfo1_val, lfo2_val;
+    uint64_t    sample_counter;         /* for /8-rate LFO updates */
 
     /* ROM-mode state (only touched when source == MV_SOURCE_ROM) */
     Machine     machine;
-    Lfo         rom_lfo1, rom_lfo2;
-    LfoPatch   *rom_lfo_patch;
-    int         rom_lfo_active;
-    uint32_t    rom_lfo1_val, rom_lfo2_val;
-    uint64_t    sample_counter;         /* for /8-rate LFO updates in ROM mode */
 
     /* Source selection + status */
     mv_source_t source;
@@ -75,9 +77,6 @@ typedef struct {
     downsampler_t down_l, down_r;
     upsampler_t   up_l, up_r;
 
-    float predelay_buf[44100 / 4];
-    int   predelay_pos;
-
     float hpf_l, hpf_r;
     float lpf_l, lpf_r;
 
@@ -100,6 +99,11 @@ int           mv_try_load_rom(mv_instance_t *inst);
 /* Cheap existence + size check for a unit's ROM file (no parsing).
  * Returns 1 if file present at expected size, 0 otherwise. */
 int           mv_unit_has_rom(const mv_instance_t *inst, mv_unit_t u);
+
+/* (Re)initialize LFO state for the current unit/program. Mirrors upstream
+ * main loop's `if (rom_type->has_lfo) init_lfo_for_program(...)` step.
+ * Called from apply_pending after unit/program changes. */
+void          mv_init_lfo(mv_instance_t *inst);
 
 /* Apply current rom file naming convention */
 const char*   mv_rom_filename(mv_unit_t u);
