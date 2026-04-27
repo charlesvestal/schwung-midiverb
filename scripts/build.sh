@@ -38,6 +38,8 @@ ${CROSS_PREFIX}gcc -O3 -shared -fPIC \
 cp src/module.json dist/midiverb/module.json
 [ -f src/help.json ] && cp src/help.json dist/midiverb/help.json
 cp build/midiverb.so dist/midiverb/midiverb.so
+cp LICENSE dist/midiverb/LICENSE
+cp NOTICE dist/midiverb/NOTICE
 cp src/dsp/THIRD_PARTY_LICENSES.md dist/midiverb/THIRD_PARTY_LICENSES.md
 chmod +x dist/midiverb/midiverb.so
 
