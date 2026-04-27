@@ -11,7 +11,7 @@ import math
 import sys
 
 TAPS = 32
-NUM_PHASES = 64
+NUM_PHASES = 256  # finer subsample resolution = lower-frequency phase-quant artifacts
 KAISER_BETA = 8.6
 
 
@@ -37,14 +37,34 @@ def sinc(x):
     return math.sin(math.pi * x) / (math.pi * x)
 
 
+def kaiser_continuous(x, beta):
+    """Kaiser window evaluated at fractional position x in [0, 1]
+    (peak at x=0.5, zero at endpoints)."""
+    arg = 2.0 * x - 1.0
+    return i0(beta * math.sqrt(max(0.0, 1.0 - arg * arg))) / i0(beta)
+
+
 def gen_table(cutoff_normalized):
-    """cutoff_normalized: cutoff frequency relative to source sample rate."""
+    """cutoff_normalized: cutoff frequency relative to source sample rate.
+
+    For phase fraction frac in [0, 1), compute h[k] for k=0..L-1 such that
+    convolving input[integer..integer+L-1] with h yields the value at
+    output position integer + (L-1)/2 + frac.
+
+    Critically: n = tap - center - frac (NOT + frac). Wrong sign creates
+    a phase-error pattern that repeats every NUM_PHASES samples and sounds
+    like high-frequency hash modulated by the input signal.
+    """
     table = [[0.0] * TAPS for _ in range(NUM_PHASES)]
+    L = TAPS
+    center = (L - 1) / 2.0
     for phase in range(NUM_PHASES):
-        offset = phase / NUM_PHASES
-        for tap in range(TAPS):
-            n = tap - TAPS // 2 + offset
-            w = kaiser(tap + (1 if offset > 0 else 0), TAPS + 1, KAISER_BETA)
+        frac = phase / NUM_PHASES
+        for tap in range(L):
+            n = tap - center - frac
+            # Window: fixed Kaiser, smooth across all phases (no offset-dependent
+            # discontinuity at the seam between phase 0 and phase 1).
+            w = kaiser_continuous((tap + 0.5) / L, KAISER_BETA)
             table[phase][tap] = 2 * cutoff_normalized * sinc(2 * cutoff_normalized * n) * w
     for phase in range(NUM_PHASES):
         s = sum(table[phase])
