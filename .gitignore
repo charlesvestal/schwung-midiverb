@@ -3,3 +3,8 @@ dist/
 *.o
 *.so
 .DS_Store
+tests/host/test_compile_smoke
+tests/host/test_resampler
+tests/host/test_core
+tests/host/wav_runner
+tests/host/mid_runner
