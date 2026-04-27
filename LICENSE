@@ -1,8 +1,9 @@
-This module includes Martin Eastwood's MVerb code and is distributed under the
-terms of the GNU General Public License, version 3 or later.
+This module includes the midiverb_emulator DSP code by thement and is
+distributed under the terms of the GNU General Public License, version 3
+or later.
 
-Schwung integration by Andre Louis.
+Schwung integration by Charles Vestal.
 
 See also:
-- https://github.com/martineastwood/mverb
-- bundled source notices in `src/dsp/MVerb.h`
+- https://github.com/thement/midiverb_emulator
+- bundled source notices in src/dsp/
