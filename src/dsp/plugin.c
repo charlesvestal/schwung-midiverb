@@ -10,6 +10,33 @@
 
 static const host_api_v1_t *g_host = NULL;
 
+/* Minimal JSON field readers — only used by set_param("state") restore.
+ * Format the encoder writes is flat {"key":value,...} so a strstr + atof
+ * is enough; we don't need a real parser. */
+static int json_get_float(const char *json, const char *key, float *out) {
+    if (!json || !key || !out) return -1;
+    char search[64];
+    snprintf(search, sizeof(search), "\"%s\":", key);
+    const char *p = strstr(json, search);
+    if (!p) return -1;
+    p += strlen(search);
+    while (*p == ' ' || *p == '\t') p++;
+    *out = (float)atof(p);
+    return 0;
+}
+
+static int json_get_int(const char *json, const char *key, int *out) {
+    if (!json || !key || !out) return -1;
+    char search[64];
+    snprintf(search, sizeof(search), "\"%s\":", key);
+    const char *p = strstr(json, search);
+    if (!p) return -1;
+    p += strlen(search);
+    while (*p == ' ' || *p == '\t') p++;
+    *out = atoi(p);
+    return 0;
+}
+
 static void apply_pending(mv_instance_t *inst) {
     int dirty = 0;
     if (inst->pending_unit >= 0) {
@@ -205,6 +232,28 @@ static void mv_process(void *vp, int16_t *audio_inout, int frames) {
 static void mv_set_param(void *vp, const char *key, const char *val) {
     mv_instance_t *inst = (mv_instance_t*)vp;
     if (!inst || !key || !val) return;
+    if (strcmp(key, "state") == 0) {
+        /* Bulk restore from the JSON written by get_param("state"). Skip
+         * fields not present so partial state (older saves) still loads. */
+        int i;
+        float f;
+        if (json_get_int(val, "unit", &i) == 0 &&
+            i >= 0 && i < MV_UNIT_COUNT)         inst->pending_unit = i;
+        if (json_get_int(val, "program", &i) == 0) inst->pending_program = i;
+        if (json_get_float(val, "mix", &f) == 0)         inst->mix = f;
+        if (json_get_float(val, "feedback", &f) == 0)    inst->feedback = f;
+        if (json_get_float(val, "input_gain", &f) == 0)  inst->input_gain = f;
+        if (json_get_float(val, "output_gain", &f) == 0) inst->output_gain = f;
+        if (json_get_float(val, "predelay_ms", &f) == 0) inst->predelay_ms = f;
+        if (json_get_float(val, "low_cut_hz", &f) == 0)  inst->low_cut_hz = f;
+        if (json_get_float(val, "high_cut_hz", &f) == 0) inst->high_cut_hz = f;
+        if (json_get_float(val, "width", &f) == 0)       inst->width = f;
+        if (json_get_float(val, "damping", &f) == 0)     inst->damping = f;
+        if (json_get_float(val, "tilt", &f) == 0)        inst->tilt = f;
+        if (json_get_float(val, "lfo_rate", &f) == 0)    inst->lfo_rate = f;
+        if (json_get_float(val, "lfo_depth", &f) == 0)   inst->lfo_depth = f;
+        return;
+    }
     if (strcmp(key, "unit") == 0) {
         int u = atoi(val);
         if (u >= 0 && u < MV_UNIT_COUNT) inst->pending_unit = u;
@@ -290,6 +339,25 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
         n = snprintf(buf, buf_len, "%d", (int)inst->source);
     } else if (strcmp(key, "rom_status") == 0) {
         n = snprintf(buf, buf_len, "%s", inst->rom_status);
+    } else if (strcmp(key, "state") == 0) {
+        /* Bulk serialization for slot autosave. Without this, the shadow UI
+         * autosave bails on fx2:state empty and silently skips writes
+         * (diagnosed 2026-05-12). */
+        n = snprintf(buf, buf_len,
+            "{\"unit\":%d,\"program\":%d,"
+            "\"mix\":%.4f,\"feedback\":%.4f,"
+            "\"input_gain\":%.4f,\"output_gain\":%.4f,"
+            "\"predelay_ms\":%.2f,"
+            "\"low_cut_hz\":%.1f,\"high_cut_hz\":%.1f,"
+            "\"width\":%.4f,\"damping\":%.4f,\"tilt\":%.4f,"
+            "\"lfo_rate\":%.4f,\"lfo_depth\":%.4f}",
+            (int)inst->unit, inst->program,
+            inst->mix, inst->feedback,
+            inst->input_gain, inst->output_gain,
+            inst->predelay_ms,
+            inst->low_cut_hz, inst->high_cut_hz,
+            inst->width, inst->damping, inst->tilt,
+            inst->lfo_rate, inst->lfo_depth);
     } else if (strcmp(key, "chain_params") == 0) {
         int max = mv_program_count(inst->unit) - 1;
         n = snprintf(buf, buf_len,
