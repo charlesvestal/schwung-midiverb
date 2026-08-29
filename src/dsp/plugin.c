@@ -366,16 +366,16 @@ static int mv_get_param(void *vp, const char *key, char *buf, int buf_len) {
             "{\"key\":\"program\",\"name\":\"Program\",\"type\":\"int\",\"min\":0,\"max\":%d},"
             "{\"key\":\"mix\",\"name\":\"Mix\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01},"
             "{\"key\":\"feedback\",\"name\":\"Feedback\",\"type\":\"float\",\"min\":0,\"max\":0.95,\"step\":0.01},"
-            "{\"key\":\"input_gain\",\"name\":\"Input Gain\",\"type\":\"float\",\"min\":0,\"max\":2,\"step\":0.01,\"unit\":\"x\"},"
-            "{\"key\":\"output_gain\",\"name\":\"Output Gain\",\"type\":\"float\",\"min\":0,\"max\":2,\"step\":0.01,\"unit\":\"x\"},"
-            "{\"key\":\"predelay_ms\",\"name\":\"Pre-delay\",\"type\":\"float\",\"min\":0,\"max\":200,\"step\":1,\"unit\":\"ms\"},"
-            "{\"key\":\"low_cut_hz\",\"name\":\"Low Cut\",\"type\":\"float\",\"min\":20,\"max\":1000,\"step\":1,\"unit\":\"Hz\"},"
-            "{\"key\":\"high_cut_hz\",\"name\":\"High Cut\",\"type\":\"float\",\"min\":1000,\"max\":20000,\"step\":50,\"unit\":\"Hz\"},"
+            "{\"key\":\"input_gain\",\"short_name\":\"Input\",\"name\":\"Input Gain\",\"type\":\"float\",\"min\":0,\"max\":2,\"step\":0.01,\"unit\":\"x\"},"
+            "{\"key\":\"output_gain\",\"short_name\":\"Output\",\"name\":\"Output Gain\",\"type\":\"float\",\"min\":0,\"max\":2,\"step\":0.01,\"unit\":\"x\"},"
+            "{\"key\":\"predelay_ms\",\"short_name\":\"delay\",\"name\":\"Pre-delay\",\"type\":\"float\",\"min\":0,\"max\":200,\"step\":1,\"unit\":\"ms\"},"
+            "{\"key\":\"low_cut_hz\",\"short_name\":\"Low\",\"name\":\"Low Cut\",\"type\":\"float\",\"min\":20,\"max\":1000,\"step\":1,\"unit\":\"Hz\"},"
+            "{\"key\":\"high_cut_hz\",\"short_name\":\"High\",\"name\":\"High Cut\",\"type\":\"float\",\"min\":1000,\"max\":20000,\"step\":50,\"unit\":\"Hz\"},"
             "{\"key\":\"width\",\"name\":\"Width\",\"type\":\"float\",\"min\":0,\"max\":1.5,\"step\":0.01},"
             "{\"key\":\"damping\",\"name\":\"Damping\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01},"
             "{\"key\":\"tilt\",\"name\":\"Tilt\",\"type\":\"float\",\"min\":-1,\"max\":1,\"step\":0.01},"
-            "{\"key\":\"lfo_rate\",\"name\":\"LFO Rate\",\"type\":\"float\",\"min\":0,\"max\":4,\"step\":0.05,\"unit\":\"x\"},"
-            "{\"key\":\"lfo_depth\",\"name\":\"LFO Depth\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01}"
+            "{\"key\":\"lfo_rate\",\"short_name\":\"Rate\",\"name\":\"LFO Rate\",\"type\":\"float\",\"min\":0,\"max\":4,\"step\":0.05,\"unit\":\"x\"},"
+            "{\"key\":\"lfo_depth\",\"short_name\":\"Depth\",\"name\":\"LFO Depth\",\"type\":\"float\",\"min\":0,\"max\":1,\"step\":0.01}"
             "]", max);
     } else if (strcmp(key, "ui_hierarchy") == 0) {
         n = snprintf(buf, buf_len,
