@@ -2,7 +2,7 @@
   "id": "midiverb",
   "name": "Midiverb",
   "abbrev": "MVB",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Alesis Midiverb / Midifex / Midiverb II emulator (lo-fi 23.4 kHz reverb)",
   "author": "Charles Vestal (DSP: thement/midiverb_emulator)",
   "license": "GPL-3.0",
