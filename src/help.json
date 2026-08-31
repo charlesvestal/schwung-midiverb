@@ -28,7 +28,45 @@
         "",
         "Knobs 5-8: PreDly,",
         "Low Cut, High Cut,",
-        "Width"
+        "Width",
+        "",
+        "Two submenus:",
+        "Extras and Unit."
+      ]
+    },
+    {
+      "title": "Extras",
+      "lines": [
+        "Four more knobs on",
+        "the Extras submenu:",
+        "",
+        "Damping: 0-1, a one-",
+        " pole lowpass inside",
+        " the feedback path.",
+        " 0 is about 3 kHz,",
+        " 1 about 50 Hz.",
+        "",
+        "Tilt: -1 to +1.",
+        " Above 0 it raises",
+        " Low Cut toward",
+        " 1 kHz (brighter);",
+        " below 0 it lowers",
+        " High Cut toward",
+        " 1 kHz (darker).",
+        "",
+        "LFO Depth: 0-1,",
+        " scales the program's",
+        " own LFO. Only some",
+        " programs have one;",
+        " on the rest it does",
+        " nothing.",
+        "",
+        "LFO Rate: 0-4x. The",
+        " DSP does not read",
+        " this yet - the LFO",
+        " runs at the rate",
+        " baked into the",
+        " program."
       ]
     },
     {
